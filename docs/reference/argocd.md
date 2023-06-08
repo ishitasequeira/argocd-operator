@@ -145,16 +145,20 @@ spec:
 
 The following properties are available for configuring the Argo CD Application Controller component.
 
-Name | Default | Description
---- | --- | ---
-Processors.Operation | 10 | The number of operation processors.
-Processors.Status | 20 | The number of status processors.
-Resources | [Empty] | The container compute resources.
-LogLevel | info | The log level to be used by the ArgoCD Application Controller component. Valid options are debug, info, error, and warn.
-AppSync | 3m | AppSync is used to control the sync frequency of ArgoCD Applications
-Sharding.enabled | false | Whether to enable sharding on the ArgoCD Application Controller component. Useful when managing a large number of clusters to relieve memory pressure on the controller component.
-Sharding.replicas | 1 | The number of replicas that will be used to support sharding of the ArgoCD Application Controller.
-Env | [Empty] | Environment to set for the application controller workloads
+Name | Default | Description | Validation Criteira |
+--- | --- | --- | ---
+Processors.Operation | 10 | The number of operation processors. | |
+Processors.Status | 20 | The number of status processors. | |
+Resources | [Empty] | The container compute resources. | |
+LogLevel | info | The log level to be used by the ArgoCD Application Controller component. | Valid options are debug, info, error, and warn. |
+AppSync | 3m | AppSync is used to control the sync frequency of ArgoCD Applications | |
+Sharding.enabled | false | Whether to enable sharding on the ArgoCD Application Controller component. Useful when managing a large number of clusters to relieve memory pressure on the controller component. | |
+Sharding.replicas | 1 | The number of replicas that will be used to support sharding of the ArgoCD Application Controller. | Must be greater than 0 |
+Env | [Empty] | Environment to set for the application controller workloads | |
+Sharding.dynamicScalingEnabled | true | Whether to enable dynamic scaling of the ArgoCD Application Controller component. This will ignore the configuration of `Sharding.enabled` and `Sharding.replicas` | |
+Sharding.minShards | 1 | The minimum number of replicas of the ArgoCD Application Controller component. | Must be greater than 0 |
+Sharding.maxShards | 1 | The maximum number of replicas of the ArgoCD Application Controller component. | Must be greater than `Sharding.minShards` |
+Sharding.clustersPerShard | 1 | The number of clusters that need to be handles by each shard. In case the replica count has reached the maxShards, the shards will manage more than one cluster. | Must be greater than 0 |
 
 ### Controller Example
 
@@ -191,10 +195,51 @@ spec:
       value: '120'    
 ```
 
+The following example shows how to set multiple replicas of Argo CD Application Controller. This example will scale up/down the Argo CD Application Controller based on the parameter clustersPerShard. The number of replicas will be set between minShards and maxShards.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ArgoCD
+metadata:
+  name: example-argocd
+  labels:
+    example: controller
+spec:
+  controller:
+    sharding:
+      dynamicScalingEnabled: true
+      minShards: 2
+      maxShards: 5
+      clustersPerShard: 10
+```
+
+!!! note
+    In case the number of replicas required is less than the minShards the number of replicas will be set as minShards. Similarly, if the required number of replicas exceeds maxShards, the replica count will be set as maxShards.
+
+
+The following example shows how to enable dynamic scaling of the ArgoCD Application Controller component.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ArgoCD
+metadata:
+  name: example-argocd
+  labels:
+    example: controller
+spec:
+  controller:
+    sharding:
+      enabled: true
+      replicas: 5
+```
+
 ## Dex Options
 
 !!! warning 
-    `.spec.dex` is deprecated and support will be removed in Argo CD operator v0.6.0. Please use `.spec.sso.dex` to configure Dex.
+    `.spec.dex` is deprecated and support will be removed in Argo CD operator v0.8.0. Please use `.spec.sso.dex` to configure Dex.
+
+!!! note
+    `.spec.dex` field was earlier scheduled for removal in Argo CD operator v0.7.0, but has been extended to Argo CD operator v0.8.0.
 
 The following properties are available for configuring the Dex component.
 
@@ -209,7 +254,7 @@ Version | v2.21.0 (SHA) | The tag to use with the Dex container image.
 
 ### Dex Example
 
-The following examples show all properties set to the default values. Both configuration methods will be supported until v0.6.0
+The following examples show all properties set to the default values. Both configuration methods will be supported until v0.8.0
 
 ``` yaml
 apiVersion: argoproj.io/v1alpha1
@@ -418,6 +463,7 @@ Name | Default | Description
 Enabled | `false` | Toggle High Availability support globally for Argo CD.
 RedisProxyImage | `haproxy` | The Redis HAProxy container image. This overrides the `ARGOCD_REDIS_HA_PROXY_IMAGE`environment variable.
 RedisProxyVersion | `2.0.4` | The tag to use for the Redis HAProxy container image.
+Resources | [Empty] | The container compute resources.
 
 ### HA Example
 
@@ -1008,7 +1054,7 @@ spec:
 There are two ways to customize resource behavior- the first way, only available with release v0.5.0+, is with subkeys (`resourceHealthChecks`, `resourceIgnoreDifferences`, and `resourceActions`), the second is without subkeys (`resourceCustomizations`). `resourceCustomizations` maps directly to the `resource.customizations` field in the `argocd-cm` ConfigMap, while each of the subkeys maps directly to their own field in the `argocd-cm`. `resourceHealthChecks` will map to `resource.customizations.health`, `resourceIgnoreDifferences` to `resource.customizations.ignoreDifferences`, and `resourceActions` to `resource.customizations.actions`.
 
 !!! warning 
-    `resourceCustomizations` is being deprecated so is encouraged to use `resourceHealthChecks`, `resourceIgnoreDifferences`, and `resourceActions` instead. It is the user's responsibility to not provide conflicting resources if they choose to use both methods of resource customizations. 
+    `resourceCustomizations` is being deprecated, and support will be removed in Argo CD Operator v0.8.0 so is encouraged to use `resourceHealthChecks`, `resourceIgnoreDifferences`, and `resourceActions` instead. It is the user's responsibility to not provide conflicting resources if they choose to use both methods of resource customizations. 
 
 ### Resource Customizations (with subkeys) Example
 
@@ -1149,7 +1195,7 @@ resource.customizations.actions.apps_Deployment: |
 ### Resource Customizations Example
 
 !!! warning 
-    `resourceCustomizations` is being deprecated in favor of `resourceHealthChecks`, `resourceIgnoreDifferences`, and `resourceActions`.
+    `resourceCustomizations` is being deprecated, and support will be removed in Argo CD Operator v0.8.0. Please use the new formats `resourceHealthChecks`, `resourceIgnoreDifferences`, and `resourceActions`.
 
 The following example defines a custom PVC health check in the `argocd-cm` ConfigMap using the `ResourceCustomizations` property on the `ArgoCD` resource.
 
@@ -1448,7 +1494,10 @@ spec:
 ## Single sign-on Options
 
 !!! warning
-    `.spec.sso.Image`, `.spec.sso.Version`, `.spec.sso.Resources` and `.spec.sso.verifyTLS` are deprecated and support will be removed in Argo CD operator v0.6.0. Please use equivalent fields under `.spec.sso.keycloak` to configure your keycloak instance.
+    `.spec.sso.Image`, `.spec.sso.Version`, `.spec.sso.Resources` and `.spec.sso.verifyTLS` are deprecated and support will be removed in Argo CD operator v0.8.0. Please use equivalent fields under `.spec.sso.keycloak` to configure your keycloak instance.
+
+!!! note
+    `.spec.sso.Image`, `.spec.sso.Version`, `.spec.sso.Resources` and `.spec.sso.verifyTLS` fields were earlier scheduled for removal in Argo CD operator v0.7.0, but have been extended to Argo CD operator v0.8.0.
 
 The following properties are available for configuring the Single sign-on component.
 
